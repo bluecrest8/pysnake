@@ -20,7 +20,7 @@ if not pygame.mixer: print ('Warning, sound disabled')
 main_dir = os.path.split(os.path.abspath(__file__))[0]
 data_dir = os.path.join(main_dir, 'snake_res')
 
-sprite_size = 32
+sprite_size = 16
 log_mode = 0
 
 #functions to create our resources
@@ -53,25 +53,23 @@ def load_sound(name):
         raise SystemExit(str(geterror()))
     return sound
 
-# new added in snake2.py for maintain the bodys
 class Snake:
-    def __init__(self, name, n):
+    def __init__(self, name, n=40, angle = 90):
         self.bodys = []
-        self.pos = []
         self.name = name
-        self.angle = 90
+        self.angle = angle
         i = 0
         for i in range(n):
             self.grow()
 
-    """grow add a snake body"""
     def grow(self):
+        """grow add a snake piece"""
         count = len(self.bodys)
         if count == 0:
             screen = pygame.display.get_surface()
             area = screen.get_rect()
-            x = area.left + area.width / 2 - 16
-            y = area.top + area.height / 2 - 16
+            x = area.left + area.width / 2 - sprite_size/2
+            y = area.top + area.height / 2 - sprite_size/2
             snake = SnakeSprite(x, y, self.angle, count, 'head1.bmp', self)
         else:
             last_body = self.bodys[count - 1]
@@ -79,21 +77,17 @@ class Snake:
             y = last_body.rect.top + sprite_size
             angle = last_body.angle
             snake = SnakeSprite(x, y, angle, count, 'body1.bmp', self)
-
         self.bodys.append(snake)
 
     def set_direction(self, angle):
-        if angle != self.angle:
+        """set current head direction"""
+        if len(self.bodys):
             s = self.bodys[0]
             s.set_direction(angle)
-            rc = self.bodys[0].rect.copy()
-            self.pos.append((angle, rc))
-            self.angle = angle
 
-    """mget_bodys return spirtes object ot RenderUpdates"""
     def get_bodys(self):
+        """mget_bodys return spirtes object ot RenderUpdates"""
         return self.bodys
-# new added in snake2.py for maintain the bodys
 
 class SnakeSprite(pygame.sprite.Sprite):
     """moves a monkey critter across the screen. it can spin the
@@ -105,62 +99,80 @@ class SnakeSprite(pygame.sprite.Sprite):
         self.rect.left = x
         self.rect.top = y
         self.angle = angle
-        self.speed = 4
+        self.speed = 5
         screen = pygame.display.get_surface()
         self.area = screen.get_rect()
         self.image = pygame.transform.rotate(self.image, self.angle)
         self.snake = snake
-        self.pos_index = 0
+        self.turns = []
 
     def update(self):
-        "walk"
+        """"walk"""
         self._walk()
 
     def _walk(self):
-        "move the body"
+        """move the body, if is the head or same direction just follow the previous piece.
+        if direction is not same with the last piece, we should move it before just follow
+        if current piece direction changed we should set the angle and position for next"""
         if self.index == 0:
             x = self.speed * math.cos(self.angle*math.pi/180)
             y = self.speed * math.sin(self.angle*math.pi/180)
             self.rect.move_ip(x, -y)
         else:
             pre_sprite = self.snake.bodys[self.index - 1]
-            if self.pos_index < len(self.snake.pos):
-                arry = self.snake.pos[self.pos_index]
-                rc = arry[1]
-                rc_center = rc.inflate(-sprite_size + 10, -sprite_size + 10)
+            direction = pre_sprite.get_direction()
+            angle = direction[0]
+            rc = direction[1]
+            if angle == self.angle:
+                x = rc.x - sprite_size * math.cos(self.angle * math.pi / 180)
+                y = rc.y + sprite_size * math.sin(self.angle * math.pi / 180)
+                self.rect.x = x
+                self.rect.y = y
+            else:
+                rc_center = rc.inflate(-sprite_size + 20, -sprite_size + 20)
                 if rc_center.collidepoint(self.rect.center):
-                    self.set_direction(arry[0])
-                    self.pos_index = self.pos_index + 1
-                    x = rc.x - self.rect.x
-                    y = rc.y - self.rect.y
-                    self.rect.center = rc.center
+                    direction = pre_sprite.remove_direction()
+                    if direction != None:
+                        angle = direction[0]
+                        self.rect.center = rc.center
+                        self.set_direction(angle)
                 else:
                     x = self.speed * math.cos(self.angle * math.pi / 180)
                     y = self.speed * math.sin(self.angle * math.pi / 180)
                     self.rect.move_ip(x, -y)
-            else:
-                x = pre_sprite.rect.x - sprite_size * math.cos(self.angle * math.pi / 180)
-                y = pre_sprite.rect.y + sprite_size * math.sin(self.angle * math.pi / 180)
-                self.rect.x = x
-                self.rect.y = y
 
     def set_direction(self, angle):
-        pre_angle = self.angle
-        self.angle = angle
-        self.image = pygame.transform.rotate(self.image, self.angle - pre_angle)
+        """set angle and position for next piece"""
+        if angle != self.angle:
+            pre_angle = self.angle
+            self.angle = angle
+            self.image = pygame.transform.rotate(self.image, self.angle - pre_angle)
+            rect = self.rect.copy()
+            self.turns.append((angle,rect))
+
+    def get_direction(self):
+        """get angle nad position for current piece"""
+        if len(self.turns) > 0:
+            return self.turns[0]
+        return (self.angle, self.rect)
+
+    def remove_direction(self):
+        """remove the angle and piece when it is used"""
+        if len(self.turns) > 0:
+            return self.turns.pop(0)
+        return None
 
 def main():
     """this function is called when the program starts.
        it initializes everything it needs, then runs in
        a loop until the function returns."""
-
     logging.basicConfig(filename='a.log',
                         format="%(asctime)s - %(name)s - %(levelname)s - %(module)s: %(message)s",
                         datefmt="%Y-%m-%d %H:%M:%S",
                         filemode="a", level=logging.DEBUG)
 #Initialize Everything
     pygame.init()
-    screen = pygame.display.set_mode((640, 480))
+    screen = pygame.display.set_mode((1920, 1080))
     pygame.display.set_caption('Snake')
     pygame.mouse.set_visible(0)
 
@@ -190,7 +202,7 @@ def main():
     area = screen.get_rect()
 
 #modified in snake2.py use Snake instead of SnakeSpirte
-    snake = Snake('Kuaikuai', 12)
+    snake = Snake('Kuaikuai')
     snake_bodys =  snake.get_bodys()
     for s in snake_bodys:
         allsprites.add(s)
