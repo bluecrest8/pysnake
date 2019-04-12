@@ -13,6 +13,7 @@ from pygame.locals import *
 from pygame.compat import geterror
 import math
 import logging
+import random
 
 if not pygame.font: print ('Warning, fonts disabled')
 if not pygame.mixer: print ('Warning, sound disabled')
@@ -20,7 +21,7 @@ if not pygame.mixer: print ('Warning, sound disabled')
 main_dir = os.path.split(os.path.abspath(__file__))[0]
 data_dir = os.path.join(main_dir, 'snake_res')
 
-sprite_size = 16
+sprite_size = 24
 log_mode = 0
 
 #functions to create our resources
@@ -54,10 +55,11 @@ def load_sound(name):
     return sound
 
 class Snake:
-    def __init__(self, name, n=40, angle = 90):
+    def __init__(self, name, n=12, angle = 90):
         self.bodys = []
         self.name = name
         self.angle = angle
+        self.move = True
         i = 0
         for i in range(n):
             self.grow()
@@ -73,8 +75,8 @@ class Snake:
             snake = SnakeSprite(x, y, self.angle, count, 'head1.bmp', self)
         else:
             last_body = self.bodys[count - 1]
-            x = last_body.rect.left
-            y = last_body.rect.top + sprite_size
+            x = last_body.rect.x - sprite_size * math.cos(self.angle*math.pi/180)
+            y = last_body.rect.y + sprite_size * math.sin(self.angle*math.pi/180)
             angle = last_body.angle
             snake = SnakeSprite(x, y, angle, count, 'body1.bmp', self)
         self.bodys.append(snake)
@@ -99,24 +101,35 @@ class SnakeSprite(pygame.sprite.Sprite):
         self.rect.left = x
         self.rect.top = y
         self.angle = angle
-        self.speed = 5
+        self.speed = 2
         screen = pygame.display.get_surface()
         self.area = screen.get_rect()
-        self.image = pygame.transform.rotate(self.image, self.angle)
         self.snake = snake
         self.turns = []
 
     def update(self):
         """"walk"""
-        self._walk()
+        if self.index == 0 and len(self.snake.bodys) > 0:
+            if self.rect.left < self.area.left or \
+                self.rect.right > self.area.right or \
+                self.rect.top < self.area.top or \
+                self.rect.top + self.rect.height > self.area.top + self.area.height:
+                angle = (self.angle + 180)%360
+                self.snake.set_direction(angle)
+            else:
+                if random.randint(0, 99) < 2:
+                    angle = random.randrange(0,360, 90)
+                    self.snake.set_direction(angle)
+        if self.snake.move == True:
+            self._walk()
 
     def _walk(self):
         """move the body, if is the head or same direction just follow the previous piece.
         if direction is not same with the last piece, we should move it before just follow
         if current piece direction changed we should set the angle and position for next"""
         if self.index == 0:
-            x = self.speed * math.cos(self.angle*math.pi/180)
-            y = self.speed * math.sin(self.angle*math.pi/180)
+            x = round(self.speed * math.cos(self.angle*math.pi/180))
+            y = round(self.speed * math.sin(self.angle*math.pi/180))
             self.rect.move_ip(x, -y)
         else:
             pre_sprite = self.snake.bodys[self.index - 1]
@@ -124,12 +137,18 @@ class SnakeSprite(pygame.sprite.Sprite):
             angle = direction[0]
             rc = direction[1]
             if angle == self.angle:
-                x = rc.x - sprite_size * math.cos(self.angle * math.pi / 180)
-                y = rc.y + sprite_size * math.sin(self.angle * math.pi / 180)
+                x = rc.x - round(sprite_size * math.cos(self.angle * math.pi / 180))
+                y = rc.y + round(sprite_size * math.sin(self.angle * math.pi / 180))
                 self.rect.x = x
                 self.rect.y = y
             else:
-                rc_center = rc.inflate(-sprite_size + 20, -sprite_size + 20)
+                dx = -sprite_size*0.8
+                if dx <=2:
+                    dx = 2
+                else:
+                    dx = math.ceil(dx)
+                rc_center = rc.inflate(dx, dx)
+                #logging.debug('rc:{},self.rect:{}'.format(rc, self.rect))
                 if rc_center.collidepoint(self.rect.center):
                     direction = pre_sprite.remove_direction()
                     if direction != None:
@@ -137,8 +156,8 @@ class SnakeSprite(pygame.sprite.Sprite):
                         self.rect.center = rc.center
                         self.set_direction(angle)
                 else:
-                    x = self.speed * math.cos(self.angle * math.pi / 180)
-                    y = self.speed * math.sin(self.angle * math.pi / 180)
+                    x = round(self.speed * math.cos(self.angle * math.pi / 180))
+                    y = round(self.speed * math.sin(self.angle * math.pi / 180))
                     self.rect.move_ip(x, -y)
 
     def set_direction(self, angle):
@@ -146,9 +165,9 @@ class SnakeSprite(pygame.sprite.Sprite):
         if angle != self.angle:
             pre_angle = self.angle
             self.angle = angle
-            self.image = pygame.transform.rotate(self.image, self.angle - pre_angle)
             rect = self.rect.copy()
             self.turns.append((angle,rect))
+            #logging.debug('{} set_direction angle:{} rc:{}'.format(self.index, angle, rect))
 
     def get_direction(self):
         """get angle nad position for current piece"""
@@ -166,13 +185,13 @@ def main():
     """this function is called when the program starts.
        it initializes everything it needs, then runs in
        a loop until the function returns."""
-    logging.basicConfig(filename='a.log',
+    logging.basicConfig(filename='snake.log',
                         format="%(asctime)s - %(name)s - %(levelname)s - %(module)s: %(message)s",
                         datefmt="%Y-%m-%d %H:%M:%S",
                         filemode="a", level=logging.DEBUG)
 #Initialize Everything
     pygame.init()
-    screen = pygame.display.set_mode((1920, 1080))
+    screen = pygame.display.set_mode((800, 600))
     pygame.display.set_caption('Snake')
     pygame.mouse.set_visible(0)
 
@@ -217,6 +236,7 @@ def main():
             if event.type == QUIT:
                 going = False
             elif event.type == KEYDOWN:
+                snake.move = True
                 if event.key == K_RIGHT:
                     snake.set_direction(0)
                 elif event.key == K_UP:
