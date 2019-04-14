@@ -53,7 +53,7 @@ def load_sound(name):
     return sound
 
 class Snake:
-    def __init__(self, name, n=30, angle = 90):
+    def __init__(self, name, n=10, angle = 90):
         """create snake at the center of the window
         the move the body to correct postion"""
         self.bodys = []
@@ -129,8 +129,8 @@ class SnakeSprite(pygame.sprite.Sprite):
                 self.snake.set_direction(angle)
             else:
                 if random.randint(0, 99) < 2:
-                    angle = random.randrange(0,359, 1)
-                    self.snake.set_direction(angle)
+                    angle = random.randrange(0,30, 5)
+                    self.snake.set_direction(angle + self.angle)
 
         if self.snake.move:
             if self.index == 0:
@@ -143,7 +143,6 @@ class SnakeSprite(pygame.sprite.Sprite):
         y = self.rect.y - round(self.speed * math.sin(self.angle * math.pi / 180))
         self.rect.x = x
         self.rect.y = y
-        logging.debug('{} walk- x:{} y:{}'.format(self.index, self.rect.x, self.rect.y))
 
         if save:
             self.set_direction(self.angle, True)
